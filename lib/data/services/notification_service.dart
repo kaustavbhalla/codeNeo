@@ -217,4 +217,15 @@ class NotificationService {
       await androidImplementation.requestExactAlarmsPermission();
     }
   }
+
+  /// Send a test notification scheduled 5 seconds from now.
+  Future<void> testNotification() async {
+    await _scheduleNotification(
+      id: 99999,
+      title: '🧪 System Test',
+      body: 'If you see this, push notifications are working!',
+      scheduledTime: DateTime.now().add(const Duration(seconds: 5)),
+      payload: 'test_payload',
+    );
+  }
 }

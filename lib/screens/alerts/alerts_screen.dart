@@ -384,6 +384,30 @@ class AlertsScreen extends StatelessWidget {
                     ],
                   ),
 
+                  const SizedBox(height: 32),
+                  
+                  // Test Notification Button
+                  Center(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Test notification scheduled in 5 seconds... go to home screen!'),
+                            backgroundColor: AppColors.surfaceContainerHigh,
+                          ),
+                        );
+                        await NotificationService().testNotification();
+                      },
+                      icon: const Icon(Icons.bug_report_outlined),
+                      label: const Text('SEND TEST NOTIFICATION'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 100),
                 ]),
               ),
