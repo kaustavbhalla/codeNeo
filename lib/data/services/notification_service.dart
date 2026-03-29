@@ -27,7 +27,7 @@ class NotificationService {
     tz.setLocalLocation(tz.getLocation(timeZoneName));
 
     // Android initialization
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
     const initSettings = InitializationSettings(android: androidSettings);
 
     await _plugin.initialize(
@@ -144,7 +144,7 @@ class NotificationService {
           playSound: true,
           enableVibration: true,
           styleInformation: BigTextStyleInformation(''),
-          icon: '@mipmap/ic_launcher',
+          icon: '@mipmap/launcher_icon',
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
