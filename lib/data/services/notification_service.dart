@@ -45,10 +45,14 @@ class NotificationService {
       enableVibration: true,
     );
 
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+    final androidImplementation = _plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    
+    await androidImplementation?.createNotificationChannel(channel);
+    
+    // Request permissions for Android 13+ and exact alarms for Android 12+
+    await androidImplementation?.requestNotificationsPermission();
+    await androidImplementation?.requestExactAlarmsPermission();
 
     _initialized = true;
   }
@@ -200,6 +204,17 @@ class NotificationService {
 
     for (final contest in upcomingContests) {
       await scheduleContestNotifications(contest, settings);
+    }
+  }
+
+  /// Request runtime permissions for notifications and exact alarms
+  Future<void> requestPermissions() async {
+    final androidImplementation = _plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        
+    if (androidImplementation != null) {
+      await androidImplementation.requestNotificationsPermission();
+      await androidImplementation.requestExactAlarmsPermission();
     }
   }
 }

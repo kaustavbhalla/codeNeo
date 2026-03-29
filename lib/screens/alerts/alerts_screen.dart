@@ -6,6 +6,7 @@ import '../../providers/settings_provider.dart';
 import '../../providers/contest_provider.dart';
 import '../../widgets/nothing_toggle.dart';
 import '../../widgets/platform_widgets.dart';
+import '../../data/services/notification_service.dart';
 
 /// Alerts Config screen — notification timing and platform toggles.
 class AlertsScreen extends StatelessWidget {
@@ -150,10 +151,16 @@ class AlertsScreen extends StatelessWidget {
                         const SizedBox(height: 16),
                         NothingToggle(
                           value: settings.masterEnabled,
-                          onChanged: (val) {
+                          onChanged: (val) async {
                             settingsProv.updateSetting((s) {
                               s.masterEnabled = val;
                             });
+                            
+                            // Ask for notification permissions if the user is turning them on
+                            if (val) {
+                              await NotificationService().requestPermissions();
+                            }
+                            
                             contestProv.rescheduleNotifications(
                               settingsProv.settings,
                             );
