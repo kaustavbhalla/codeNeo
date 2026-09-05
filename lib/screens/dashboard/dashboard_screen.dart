@@ -335,14 +335,14 @@ class _HeroContestCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                AppDateUtils.formatUtc(contest.startTime),
+                AppDateUtils.formatLocal(contest.startTime),
                 style: AppTypography.titleMedium.copyWith(
                   color: AppColors.primary,
                 ),
               ),
               const SizedBox(width: 4),
               Text(
-                'UTC',
+                'LOCAL',
                 style: AppTypography.labelSmall.copyWith(
                   color: AppColors.outline,
                 ),
@@ -351,7 +351,7 @@ class _HeroContestCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'LOCAL: ${AppDateUtils.formatLocal(contest.startTime)}',
+            'UTC: ${AppDateUtils.formatUtc(contest.startTime)}',
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.onSurfaceVariant,
             ),
@@ -482,14 +482,14 @@ class _ContestListItem extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      AppDateUtils.formatUtc(contest.startTime),
+                      AppDateUtils.formatLocal(contest.startTime),
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      'UTC',
+                      'LOCAL',
                       style: AppTypography.labelSmall.copyWith(
                         color: AppColors.outlineVariant,
                         fontSize: 9,

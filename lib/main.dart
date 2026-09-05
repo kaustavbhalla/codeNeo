@@ -18,12 +18,14 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Set system UI style for OLED experience
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: AppColors.surfaceContainer,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarColor: AppColors.surfaceContainer,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
 
   // Initialize notifications
   await NotificationService().initialize();
@@ -111,9 +113,10 @@ class _ContestTrackerAppState extends State<ContestTrackerApp> {
         '/onboarding': (_) => const OnboardingScreen(),
         '/home': (_) => const AppShell(),
       },
-      home: _isLoading
-          ? _SplashScreen()
-          : _isOnboarded
+      home:
+          _isLoading
+              ? _SplashScreen()
+              : _isOnboarded
               ? const AppShell()
               : const OnboardingScreen(),
     );
@@ -194,10 +197,7 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: AppColors.surfaceContainer,
@@ -269,9 +269,10 @@ class _NavItem extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary.withValues(alpha: 0.1)
-              : Colors.transparent,
+          color:
+              isSelected
+                  ? AppColors.primary.withValues(alpha: 0.1)
+                  : Colors.transparent,
           borderRadius: BorderRadius.circular(100),
         ),
         child: Column(

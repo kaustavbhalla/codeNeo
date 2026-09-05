@@ -170,8 +170,9 @@ class CodeChefService {
 
     DateTime startTime;
     try {
-      final startDate = c['contest_start_date'] as String? ??
-          c['contest_start_date_iso'] as String? ??
+      // Try ISO format first — it's parseable by DateTime.parse()
+      final startDate = c['contest_start_date_iso'] as String? ??
+          c['contest_start_date'] as String? ??
           '';
       startTime = DateTime.parse(startDate).toUtc();
     } catch (_) {

@@ -33,6 +33,14 @@ class ContestRepository {
       allContests.addAll(platformContests);
     }
 
+    // Deduplicate by (name, platform) — API may return the same
+    // contest under different codes or across categories.
+    final seen = <String>{};
+    allContests.retainWhere((c) {
+      final key = '${c.platform.name}_${c.name}';
+      return seen.add(key);
+    });
+
     // Load saved notification preferences
     await _loadNotificationPrefs(allContests);
 
