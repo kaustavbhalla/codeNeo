@@ -14,7 +14,7 @@ class ApiConstants {
   static const String leetcodeContestUrl = 'https://leetcode.com/contest';
 
   // ─── CodeChef ───
-  static const String codechefApi = 'https://codechef-api.vercel.app/handle';
+  static const String codechefProfileUrl = 'https://www.codechef.com/users';
   static const String codechefContests = 'https://www.codechef.com/api/list/contests/all';
   static const String codechefContestUrl = 'https://www.codechef.com';
 
