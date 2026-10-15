@@ -43,6 +43,11 @@ class LeetCodeQueries {
           acSubmissionNum {
             difficulty
             count
+            submissions
+          }
+          totalSubmissionNum {
+            difficulty
+            submissions
           }
         }
       }

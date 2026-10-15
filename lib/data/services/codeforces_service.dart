@@ -77,28 +77,60 @@ class CodeforcesService {
 
   /// Fetch the number of unique problems solved via user.status.
   Future<int> fetchProblemsSolved(String handle) async {
+    return (await fetchSubmissionSummary(handle))?.solved ?? 0;
+  }
+
+  /// Reuse user.status for unique solves and submission-attempt statistics.
+  Future<({int solved, SubmissionStats stats, ActivityData activity})?>
+  fetchSubmissionSummary(String handle) async {
     try {
       final response = await _client.get(
         Uri.parse('${ApiConstants.codeforcesBase}/user.status?handle=$handle'),
       );
 
-      if (response.statusCode != 200) return 0;
+      if (response.statusCode != 200) return null;
 
       final data = jsonDecode(response.body);
-      if (data['status'] != 'OK') return 0;
+      if (data['status'] != 'OK') return null;
 
       final submissions = data['result'] as List;
       final solved = <String>{};
+      final calendar = <DateTime, int>{};
+      int accepted = 0;
+      int judged = 0;
       for (final s in submissions) {
+        final timestamp = s['creationTimeSeconds'] as int?;
+        if (timestamp != null) {
+          final date = ActivityData.day(
+            DateTime.fromMillisecondsSinceEpoch(timestamp * 1000, isUtc: true),
+          );
+          calendar.update(date, (count) => count + 1, ifAbsent: () => 1);
+        }
+        // Pending and skipped submissions have no final judged outcome.
+        if (s['verdict'] == null ||
+            s['verdict'] == 'TESTING' ||
+            s['verdict'] == 'SKIPPED') {
+          continue;
+        }
+        judged++;
         if (s['verdict'] == 'OK') {
+          accepted++;
           final problem = s['problem'];
-          final key = '${problem['contestId']}-${problem['index']}';
+          final key =
+              '${problem['contestId'] ?? problem['problemsetName']}-${problem['index']}';
           solved.add(key);
         }
       }
-      return solved.length;
+      return (
+        solved: solved.length,
+        stats: SubmissionStats(accepted: accepted, total: judged),
+        activity: ActivityData(
+          submissionCalendar: calendar,
+          totalActiveDays: calendar.length,
+        ),
+      );
     } catch (e) {
-      return 0;
+      return null;
     }
   }
 

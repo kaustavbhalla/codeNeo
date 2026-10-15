@@ -16,10 +16,7 @@ class CodeChefService {
     try {
       final response = await _client.get(
         Uri.parse('${ApiConstants.codechefProfileUrl}/$handle'),
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': 'text/html',
-        },
+        headers: {'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html'},
       );
 
       if (response.statusCode != 200) return null;
@@ -65,6 +62,7 @@ class CodeChefService {
         rank: stars,
         globalRank: globalRank,
         problemsSolved: _extractProblemsSolved(html),
+        activityData: _extractActivityCalendar(html),
         contestsAttended: contestsAttended,
         avatarUrl: avatarUrl,
         lastUpdated: DateTime.now(),
@@ -79,10 +77,7 @@ class CodeChefService {
     try {
       final response = await _client.get(
         Uri.parse('${ApiConstants.codechefProfileUrl}/$handle'),
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': 'text/html',
-        },
+        headers: {'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html'},
       );
 
       if (response.statusCode != 200) return [];
@@ -95,27 +90,26 @@ class CodeChefService {
 
       for (final r in allRating) {
         final rating = int.tryParse(r['rating']?.toString() ?? '0') ?? 0;
-        final name = r['name'] as String? ??
-            r['code'] as String? ??
-            'Unknown';
+        final name = r['name'] as String? ?? r['code'] as String? ?? 'Unknown';
 
         DateTime timestamp;
         try {
-          timestamp =
-              DateTime.parse(r['end_date'] as String? ?? '').toUtc();
+          timestamp = DateTime.parse(r['end_date'] as String? ?? '').toUtc();
         } catch (_) {
           timestamp = DateTime.now().toUtc();
         }
 
-        history.add(RatingChange(
-          contestName: name,
-          contestId: 0,
-          newRating: rating,
-          oldRating: prevRating,
-          rank: int.tryParse(r['rank']?.toString() ?? '0') ?? 0,
-          timestamp: timestamp,
-          platform: Platform.codechef,
-        ));
+        history.add(
+          RatingChange(
+            contestName: name,
+            contestId: 0,
+            newRating: rating,
+            oldRating: prevRating,
+            rank: int.tryParse(r['rank']?.toString() ?? '0') ?? 0,
+            timestamp: timestamp,
+            platform: Platform.codechef,
+          ),
+        );
         prevRating = rating;
       }
 
@@ -130,9 +124,7 @@ class CodeChefService {
     try {
       final response = await _client.get(
         Uri.parse(ApiConstants.codechefContests),
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: {'Accept': 'application/json'},
       );
 
       if (response.statusCode != 200) return [];
@@ -171,7 +163,8 @@ class CodeChefService {
     DateTime startTime;
     try {
       // Try ISO format first — it's parseable by DateTime.parse()
-      final startDate = c['contest_start_date_iso'] as String? ??
+      final startDate =
+          c['contest_start_date_iso'] as String? ??
           c['contest_start_date'] as String? ??
           '';
       startTime = DateTime.parse(startDate).toUtc();
@@ -200,6 +193,97 @@ class CodeChefService {
 
   // ─── HTML Parsing Helpers ───
 
+  ActivityData? _extractActivityCalendar(String html) {
+    try {
+      final match = RegExp(
+        r'(?:var|let|const)\s+userDailySubmissionsStats\s*=\s*(\[.*?\])\s*;',
+        dotAll: true,
+      ).firstMatch(html);
+      if (match == null) return null;
+      final rows = jsonDecode(match.group(1)!) as List;
+      final calendar = <DateTime, int>{};
+      for (final row in rows) {
+        final parts =
+            (row['date'] as String).split('-').map(int.parse).toList();
+        final date = DateTime.utc(parts[0], parts[1], parts[2]);
+        final count = row['value'] as int;
+        if (count <= 0) continue;
+        calendar.update(date, (value) => value + count, ifAbsent: () => count);
+      }
+      return ActivityData(
+        submissionCalendar: calendar,
+        totalActiveDays: calendar.length,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Verdict totals from CodeChef's complete public submission listing.
+  /// Learning-path submissions can be absent from this listing.
+  Future<SubmissionStats?> fetchSubmissionStats(String handle) async {
+    try {
+      final seen = <String>{};
+      var accepted = 0;
+      var total = 0;
+      var pages = 1;
+      for (var page = 0; page < pages; page++) {
+        final uri = Uri.https('www.codechef.com', '/recent/user', {
+          'user_handle': handle,
+          'page': '$page',
+        });
+        final response = await _client.get(
+          uri,
+          headers: {'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'},
+        );
+        if (response.statusCode != 200) return null;
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final pageCount = data['max_page'] as int?;
+        final content = data['content'] as String?;
+        // Avoid silently calculating an account-wide rate from a truncated list.
+        if (pageCount == null ||
+            pageCount < 0 ||
+            pageCount > 100 ||
+            content == null) {
+          return null;
+        }
+        if (page == 0) pages = pageCount == 0 ? 1 : pageCount;
+        if (pageCount > pages) return null;
+        if (!content.contains('<table')) return null;
+        final rows = RegExp(
+          r'<tr\b[^>]*>.*?</tr>',
+          dotAll: true,
+          caseSensitive: false,
+        ).allMatches(content);
+        for (final row in rows) {
+          final html = row.group(0)!;
+          final id = RegExp(r'/viewsolution/(\d+)').firstMatch(html)?.group(1);
+          if (id == null || !seen.add(id)) continue;
+          final verdict =
+              RegExp(
+                    "<span\\b[^>]*title=[\"']([^\"']+)[\"']",
+                    caseSensitive: false,
+                  )
+                  .allMatches(html)
+                  .map((match) => match.group(1)!.toLowerCase())
+                  .where(
+                    (title) => RegExp(
+                      r'accepted|wrong answer|limit exceeded|runtime error|compil(?:e|ation) error|internal error|presentation error|running|queued|judging',
+                    ).hasMatch(title),
+                  )
+                  .firstOrNull;
+          if (verdict == null) return null;
+          if (RegExp(r'running|queued|judging').hasMatch(verdict)) continue;
+          total++;
+          if (verdict == 'accepted') accepted++;
+        }
+      }
+      return SubmissionStats(accepted: accepted, total: total);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Extract the profile's total, rather than path or contest counts.
   int _extractProblemsSolved(String html) {
     final text = html
@@ -216,8 +300,10 @@ class CodeChefService {
   /// Extract the `all_rating` JSON array from the embedded script.
   List<Map<String, dynamic>> _extractAllRating(String html) {
     try {
-      final pattern = RegExp(r'var\s+all_rating\s*=\s*(\[.*?\]);',
-          dotAll: true);
+      final pattern = RegExp(
+        r'var\s+all_rating\s*=\s*(\[.*?\]);',
+        dotAll: true,
+      );
       final match = pattern.firstMatch(html);
       if (match == null) return [];
 
@@ -234,8 +320,7 @@ class CodeChefService {
   /// Extract current rating from `<div class="rating-number">`.
   int? _extractRatingNumber(String html) {
     try {
-      final pattern = RegExp(
-          r'<div\s+class="rating-number">\s*(\d+)\s*</div>');
+      final pattern = RegExp(r'<div\s+class="rating-number">\s*(\d+)\s*</div>');
       final match = pattern.firstMatch(html);
       if (match == null) return null;
       return int.tryParse(match.group(1)!);
@@ -260,7 +345,8 @@ class CodeChefService {
   String _extractStars(String html) {
     try {
       final pattern = RegExp(
-          r'<div\s+class="rating-star">\s*((?:<span[^>]*>★</span>\s*)+)</div>');
+        r'<div\s+class="rating-star">\s*((?:<span[^>]*>★</span>\s*)+)</div>',
+      );
       final match = pattern.firstMatch(html);
       if (match == null) return '★';
 
@@ -278,7 +364,8 @@ class CodeChefService {
   int _extractGlobalRank(String html) {
     try {
       final pattern = RegExp(
-          '<strong\\s+class=[\'"]global-rank[\'"]>\\s*(\\d+)\\s*</strong>');
+        '<strong\\s+class=[\'"]global-rank[\'"]>\\s*(\\d+)\\s*</strong>',
+      );
       final match = pattern.firstMatch(html);
       if (match == null) return 0;
       return int.tryParse(match.group(1)!) ?? 0;
@@ -304,15 +391,17 @@ class CodeChefService {
     try {
       // Look for profile image in the page
       final pattern = RegExp(
-          '<img[^>]+src=["\']([^"\']*(?:avatar|profile|gravatar)[^"\']*)["\']',
-          caseSensitive: false);
+        '<img[^>]+src=["\']([^"\']*(?:avatar|profile|gravatar)[^"\']*)["\']',
+        caseSensitive: false,
+      );
       var match = pattern.firstMatch(html);
       if (match != null) return match.group(1);
 
       // Fallback: look for the user image class
       final fallback = RegExp(
-          '<img[^>]+class=["\'][^"\']*user[^"\']*["\'][^>]+src=["\']([^"\']+)["\']',
-          caseSensitive: false);
+        '<img[^>]+class=["\'][^"\']*user[^"\']*["\'][^>]+src=["\']([^"\']+)["\']',
+        caseSensitive: false,
+      );
       match = fallback.firstMatch(html);
       return match?.group(1);
     } catch (_) {

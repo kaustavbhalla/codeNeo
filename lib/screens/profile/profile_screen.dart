@@ -7,6 +7,7 @@ import '../../data/models/user_profile.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../widgets/platform_widgets.dart';
+import '../../widgets/activity_heatmap.dart';
 
 /// Global Profile screen — aggregate stats, heatmap, platform cards.
 class ProfileScreen extends StatelessWidget {
@@ -89,7 +90,7 @@ class ProfileScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'GLOBAL DISTRIBUTION INDEX | LAST 180 DAYS',
+                            'TOTAL SOLVED ACROSS CONNECTED PLATFORMS',
                             style: AppTypography.labelSmall.copyWith(
                               color: AppColors.outline,
                             ),
@@ -123,7 +124,11 @@ class ProfileScreen extends StatelessWidget {
                     const SizedBox(height: 16),
 
                     // Activity Heatmap
-                    _ActivityHeatmap(activityData: profileProv.activityData),
+                    ActivityHeatmap(
+                      activityData: profileProv.activityData,
+                      platforms: profileProv.activityPlatforms,
+                      missingPlatforms: profileProv.missingActivityPlatforms,
+                    ),
 
                     const SizedBox(height: 16),
 
@@ -160,7 +165,9 @@ class ProfileScreen extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.all(16),
                           side: BorderSide(
-                            color: AppColors.outlineVariant.withValues(alpha: 0.3),
+                            color: AppColors.outlineVariant.withValues(
+                              alpha: 0.3,
+                            ),
                           ),
                         ),
                       ),
@@ -177,7 +184,10 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showSettingsDialog(BuildContext context, SettingsProvider settingsProv) {
+  void _showSettingsDialog(
+    BuildContext context,
+    SettingsProvider settingsProv,
+  ) {
     final lcController = TextEditingController(
       text: settingsProv.handles['leetcode'] ?? '',
     );
@@ -190,210 +200,70 @@ class ProfileScreen extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          'CONFIGURE HANDLES',
-          style: AppTypography.headlineSmall,
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: lcController,
-              decoration: const InputDecoration(
-                labelText: 'LeetCode',
-                prefixText: 'LC: ',
-              ),
+      builder:
+          (ctx) => AlertDialog(
+            title: Text(
+              'CONFIGURE HANDLES',
+              style: AppTypography.headlineSmall,
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: cfController,
-              decoration: const InputDecoration(
-                labelText: 'Codeforces',
-                prefixText: 'CF: ',
-              ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: lcController,
+                  decoration: const InputDecoration(
+                    labelText: 'LeetCode',
+                    prefixText: 'LC: ',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: cfController,
+                  decoration: const InputDecoration(
+                    labelText: 'Codeforces',
+                    prefixText: 'CF: ',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: ccController,
+                  decoration: const InputDecoration(
+                    labelText: 'CodeChef',
+                    prefixText: 'CC: ',
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: ccController,
-              decoration: const InputDecoration(
-                labelText: 'CodeChef',
-                prefixText: 'CC: ',
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('CANCEL'),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final handles = <String, String>{};
-              if (lcController.text.trim().isNotEmpty) {
-                handles['leetcode'] = lcController.text.trim();
-              }
-              if (cfController.text.trim().isNotEmpty) {
-                handles['codeforces'] = cfController.text.trim();
-              }
-              if (ccController.text.trim().isNotEmpty) {
-                handles['codechef'] = ccController.text.trim();
-              }
-              settingsProv.saveHandles(handles);
+              ElevatedButton(
+                onPressed: () {
+                  final handles = <String, String>{};
+                  if (lcController.text.trim().isNotEmpty) {
+                    handles['leetcode'] = lcController.text.trim();
+                  }
+                  if (cfController.text.trim().isNotEmpty) {
+                    handles['codeforces'] = cfController.text.trim();
+                  }
+                  if (ccController.text.trim().isNotEmpty) {
+                    handles['codechef'] = ccController.text.trim();
+                  }
+                  settingsProv.saveHandles(handles);
 
-              final profileProv = context.read<ProfileProvider>();
-              profileProv.setHandles(handles);
-              profileProv.fetchAllProfiles();
+                  final profileProv = context.read<ProfileProvider>();
+                  profileProv.setHandles(handles);
+                  profileProv.fetchAllProfiles();
 
-              Navigator.pop(ctx);
-            },
-            child: const Text('SAVE'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// GitHub-style activity heatmap.
-class _ActivityHeatmap extends StatelessWidget {
-  final ActivityData? activityData;
-
-  const _ActivityHeatmap({this.activityData});
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final weeksToShow = 20;
-    final startDate = now.subtract(Duration(days: weeksToShow * 7));
-
-    return SurfaceCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'ACTIVITY',
-                style: AppTypography.labelMedium.copyWith(
-                  color: AppColors.outline,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'LEETCODE',
-                style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.outline,
-                  fontSize: 9,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'CODEFORCES',
-                style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.outline,
-                  fontSize: 9,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'CODECHEF',
-                style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.outline,
-                  fontSize: 9,
-                ),
+                  Navigator.pop(ctx);
+                },
+                child: const Text('SAVE'),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // Heatmap grid
-          SizedBox(
-            height: 96,
-            child: Row(
-              children: List.generate(weeksToShow, (weekIndex) {
-                return Expanded(
-                  child: Column(
-                    children: List.generate(7, (dayIndex) {
-                      final date = startDate.add(
-                        Duration(days: weekIndex * 7 + dayIndex),
-                      );
-                      final normalizedDate = DateTime.utc(
-                        date.year,
-                        date.month,
-                        date.day,
-                      );
-                      final count =
-                          activityData?.submissionCalendar[normalizedDate] ?? 0;
-
-                      return Expanded(
-                        child: Container(
-                          margin: const EdgeInsets.all(0.5),
-                          decoration: BoxDecoration(
-                            color: _getHeatColor(count),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                );
-              }),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Streak info
-          Row(
-            children: [
-              Text(
-                '${activityData?.currentStreak ?? 0} DAY STREAK',
-                style: AppTypography.titleSmall.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${activityData?.totalActiveDays ?? 0}',
-                style: AppTypography.titleSmall.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'DAYS',
-                style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.outline,
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Intensity legend
-              ...List.generate(4, (i) {
-                return Container(
-                  width: 10,
-                  height: 10,
-                  margin: const EdgeInsets.only(left: 2),
-                  decoration: BoxDecoration(
-                    color: _getHeatColor((i + 1) * 2),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                );
-              }),
-            ],
-          ),
-        ],
-      ),
     );
-  }
-
-  Color _getHeatColor(int count) {
-    if (count == 0) return AppColors.surfaceContainerLow;
-    if (count <= 1) return AppColors.primary.withValues(alpha: 0.15);
-    if (count <= 3) return AppColors.primary.withValues(alpha: 0.30);
-    if (count <= 5) return AppColors.primary.withValues(alpha: 0.50);
-    return AppColors.primary.withValues(alpha: 0.75);
   }
 }
 
@@ -448,9 +318,7 @@ class _PlatformProfileCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               '@${handle!}',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.outline,
-              ),
+              style: AppTypography.bodySmall.copyWith(color: AppColors.outline),
             ),
           ],
           const SizedBox(height: 16),
@@ -461,10 +329,7 @@ class _PlatformProfileCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'RATING',
-                        style: AppTypography.statLabel,
-                      ),
+                      Text('RATING', style: AppTypography.statLabel),
                       const SizedBox(height: 2),
                       Text(
                         '${profile!.currentRating}',
@@ -479,10 +344,7 @@ class _PlatformProfileCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'SOLVED',
-                        style: AppTypography.statLabel,
-                      ),
+                      Text('SOLVED', style: AppTypography.statLabel),
                       const SizedBox(height: 2),
                       Text(
                         '${profile!.problemsSolved}',
@@ -497,10 +359,7 @@ class _PlatformProfileCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'CONTESTS',
-                        style: AppTypography.statLabel,
-                      ),
+                      Text('CONTESTS', style: AppTypography.statLabel),
                       const SizedBox(height: 2),
                       Text(
                         '${profile!.contestsAttended}',
@@ -512,25 +371,37 @@ class _PlatformProfileCard extends StatelessWidget {
                   ),
                 ),
               ],
-            )
-          else
+            ),
+          if (profile != null) ...[
+            const SizedBox(height: 12),
+            _StatBox(
+              label: 'ACCEPTANCE RATE',
+              value:
+                  profile!.submissionStats?.acceptanceRate == null
+                      ? '—'
+                      : '${profile!.submissionStats!.acceptanceRate!.toStringAsFixed(1)}%',
+            ),
+            if (profile!.submissionStats == null)
+              Text(
+                'Submission totals unavailable',
+                style: AppTypography.bodySmall,
+              ),
+            if (platform == Platform.codechef &&
+                profile!.submissionStats != null)
+              Text(
+                'Based on publicly listed submissions; learning-path attempts may be omitted.',
+                style: AppTypography.bodySmall,
+              ),
+          ] else
             Text(
               handle == null || handle!.isEmpty
                   ? 'No handle configured'
                   : 'Loading...',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.outline,
-              ),
+              style: AppTypography.bodySmall.copyWith(color: AppColors.outline),
             ),
         ],
       ),
     );
-  }
-
-  String _formatNumber(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
   }
 }
 
@@ -551,24 +422,45 @@ class _AggregateStats extends StatelessWidget {
               Expanded(
                 child: _StatBox(
                   label: 'TOTAL SUBMISSIONS',
-                  value: '${profileProv.totalSolved}',
+                  value: profileProv.submissionStats?.total.toString() ?? '—',
                 ),
               ),
               Expanded(
                 child: _StatBox(
                   label: 'ACCEPTANCE RATE',
-                  value: '—',
+                  value:
+                      profileProv.submissionStats?.acceptanceRate == null
+                          ? '—'
+                          : '${profileProv.submissionStats!.acceptanceRate!.toStringAsFixed(1)}%',
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Text(
+            profileProv.submissionProfiles.isEmpty
+                ? 'Submission statistics unavailable'
+                : 'Submission stats: ${profileProv.submissionProfiles.map((profile) => profile.platform.displayName).join(', ')}',
+            style: AppTypography.bodySmall,
+          ),
           const SizedBox(height: 12),
+          if (profileProv.submissionProfiles.any(
+            (profile) => profile.platform == Platform.codechef,
+          ))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'CodeChef acceptance covers publicly listed submissions; learning-path attempts may be omitted.',
+                style: AppTypography.bodySmall,
+              ),
+            ),
           Row(
             children: [
               Expanded(
                 child: _StatBox(
-                  label: 'DAYS STREAKED',
-                  value: '${profileProv.activityData?.currentStreak ?? 0}',
+                  label: 'CURRENT ACTIVITY STREAK',
+                  value:
+                      profileProv.activityData?.currentStreak.toString() ?? '—',
                 ),
               ),
               Expanded(
@@ -596,16 +488,11 @@ class _StatBox extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: AppTypography.statLabel,
-        ),
+        Text(label, style: AppTypography.statLabel),
         const SizedBox(height: 4),
         Text(
           value,
-          style: AppTypography.titleLarge.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700),
         ),
       ],
     );

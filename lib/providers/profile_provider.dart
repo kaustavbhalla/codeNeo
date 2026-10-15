@@ -13,7 +13,6 @@ class ProfileProvider extends ChangeNotifier {
 
   final Map<Platform, UserProfile> _profiles = {};
   final Map<Platform, List<RatingChange>> _ratingHistories = {};
-  ActivityData? _activityData;
   bool _isLoading = false;
   String? _error;
   Map<String, String> _handles = {};
@@ -22,13 +21,45 @@ class ProfileProvider extends ChangeNotifier {
     CodeforcesService? cfService,
     LeetCodeService? lcService,
     CodeChefService? ccService,
-  })  : _cfService = cfService ?? CodeforcesService(),
-        _lcService = lcService ?? LeetCodeService(),
-        _ccService = ccService ?? CodeChefService();
+  }) : _cfService = cfService ?? CodeforcesService(),
+       _lcService = lcService ?? LeetCodeService(),
+       _ccService = ccService ?? CodeChefService();
 
   Map<Platform, UserProfile> get profiles => _profiles;
   Map<Platform, List<RatingChange>> get ratingHistories => _ratingHistories;
-  ActivityData? get activityData => _activityData;
+  List<Platform> get activityPlatforms =>
+      Platform.values
+          .where((platform) => _profiles[platform]?.activityData != null)
+          .toList();
+
+  List<Platform> get missingActivityPlatforms =>
+      Platform.values
+          .where(
+            (platform) =>
+                (_handles[platform.name]?.isNotEmpty ?? false) &&
+                !activityPlatforms.contains(platform),
+          )
+          .toList();
+
+  ActivityData? get activityData {
+    if (activityPlatforms.isEmpty) return null;
+    final merged = <DateTime, int>{};
+    for (final platform in activityPlatforms) {
+      for (final entry
+          in _profiles[platform]!.activityData!.submissionCalendar.entries) {
+        merged.update(
+          entry.key,
+          (count) => count + entry.value,
+          ifAbsent: () => entry.value,
+        );
+      }
+    }
+    return ActivityData(
+      submissionCalendar: merged,
+      totalActiveDays: merged.values.where((count) => count > 0).length,
+    );
+  }
+
   bool get isLoading => _isLoading;
   String? get error => _error;
   Map<String, String> get handles => _handles;
@@ -45,8 +76,36 @@ class ProfileProvider extends ChangeNotifier {
   int get totalContests =>
       _profiles.values.fold(0, (sum, p) => sum + p.contestsAttended);
 
+  List<UserProfile> get submissionProfiles =>
+      Platform.values
+          .map((platform) => _profiles[platform])
+          .whereType<UserProfile>()
+          .where((profile) => profile.submissionStats != null)
+          .toList();
+
+  SubmissionStats? get submissionStats {
+    final available = submissionProfiles;
+    if (available.isEmpty) return null;
+    return SubmissionStats(
+      accepted: available.fold(
+        0,
+        (sum, profile) => sum + profile.submissionStats!.accepted,
+      ),
+      total: available.fold(
+        0,
+        (sum, profile) => sum + profile.submissionStats!.total,
+      ),
+    );
+  }
+
   void setHandles(Map<String, String> handles) {
-    _handles = handles;
+    for (final platform in Platform.values) {
+      if (_handles[platform.name] != handles[platform.name]) {
+        _profiles.remove(platform);
+        _ratingHistories.remove(platform);
+      }
+    }
+    _handles = Map.of(handles);
   }
 
   /// Fetch all profile data.
@@ -89,15 +148,19 @@ class ProfileProvider extends ChangeNotifier {
 
   Future<void> _fetchCodeforcesProfile(String handle) async {
     final profile = await _cfService.fetchUserInfo(handle);
-    final problemsSolved = await _cfService.fetchProblemsSolved(handle);
+    final summary = await _cfService.fetchSubmissionSummary(handle);
+    if (_handles['codeforces'] != handle) return;
 
     if (profile != null) {
       _profiles[Platform.codeforces] = profile.copyWith(
-        problemsSolved: problemsSolved,
+        problemsSolved: summary?.solved,
+        submissionStats: summary?.stats,
+        activityData: summary?.activity,
       );
     }
 
     final history = await _cfService.fetchRatingHistory(handle);
+    if (_handles['codeforces'] != handle) return;
     _ratingHistories[Platform.codeforces] = history;
 
     // Merge contest count from history
@@ -112,6 +175,7 @@ class ProfileProvider extends ChangeNotifier {
     final profile = await _lcService.fetchUserProfile(handle);
     final contestInfo = await _lcService.fetchContestInfo(handle);
     final activity = await _lcService.fetchActivityCalendar(handle);
+    if (_handles['leetcode'] != handle) return;
 
     if (profile != null && contestInfo.profile != null) {
       _profiles[Platform.leetcode] = UserProfile(
@@ -122,28 +186,31 @@ class ProfileProvider extends ChangeNotifier {
         rank: contestInfo.profile!.rank,
         globalRank: profile.globalRank,
         problemsSolved: profile.problemsSolved,
+        submissionStats: profile.submissionStats,
+        activityData: activity,
         contestsAttended: contestInfo.profile!.contestsAttended,
         avatarUrl: profile.avatarUrl,
         lastUpdated: DateTime.now(),
       );
     } else if (profile != null) {
-      _profiles[Platform.leetcode] = profile;
+      _profiles[Platform.leetcode] = profile.copyWith(activityData: activity);
     }
 
     _ratingHistories[Platform.leetcode] = contestInfo.history;
-
-    if (activity != null) {
-      _activityData = activity;
-    }
   }
 
   Future<void> _fetchCodeChefProfile(String handle) async {
     final profile = await _ccService.fetchUserProfile(handle);
+    if (_handles['codechef'] != handle) return;
+    final stats =
+        profile == null ? null : await _ccService.fetchSubmissionStats(handle);
+    if (_handles['codechef'] != handle) return;
     if (profile != null) {
-      _profiles[Platform.codechef] = profile;
+      _profiles[Platform.codechef] = profile.copyWith(submissionStats: stats);
     }
 
     final history = await _ccService.fetchRatingHistory(handle);
+    if (_handles['codechef'] != handle) return;
     _ratingHistories[Platform.codechef] = history;
   }
 }

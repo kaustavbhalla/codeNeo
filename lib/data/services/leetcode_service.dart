@@ -84,9 +84,18 @@ class LeetCodeService {
       final stats = user['submitStatsGlobal']?['acSubmissionNum'] as List? ?? [];
 
       int totalSolved = 0;
+      int? acceptedSubmissions;
       for (final s in stats) {
         if (s['difficulty'] == 'All') {
           totalSolved = s['count'] as int? ?? 0;
+          acceptedSubmissions = s['submissions'] as int?;
+        }
+      }
+      int? totalSubmissions;
+      for (final s
+          in user['submitStatsGlobal']?['totalSubmissionNum'] as List? ?? []) {
+        if (s['difficulty'] == 'All') {
+          totalSubmissions = s['submissions'] as int?;
         }
       }
 
@@ -96,6 +105,13 @@ class LeetCodeService {
         currentRating: 0, // Will be filled by contest info
         globalRank: profile['ranking'] as int? ?? 0,
         problemsSolved: totalSolved,
+        submissionStats:
+            acceptedSubmissions != null && totalSubmissions != null
+                ? SubmissionStats(
+                  accepted: acceptedSubmissions,
+                  total: totalSubmissions,
+                )
+                : null,
         avatarUrl: profile['userAvatar'] as String?,
         lastUpdated: DateTime.now(),
       );
@@ -139,17 +155,17 @@ class LeetCodeService {
         final rating = (h['rating'] as num?)?.toDouble() ?? 0;
 
         history.add(RatingChange(
-          contestName: contest['title'] as String? ?? 'Unknown',
-          contestId: 0,
-          newRating: rating.toInt(),
-          oldRating: prevRating.toInt(),
-          rank: h['ranking'] as int? ?? 0,
-          timestamp: DateTime.fromMillisecondsSinceEpoch(
-            ((contest['startTime'] as int?) ?? 0) * 1000,
-            isUtc: true,
-          ),
-          platform: Platform.leetcode,
-        ));
+            contestName: contest['title'] as String? ?? 'Unknown',
+            contestId: 0,
+            newRating: rating.toInt(),
+            oldRating: prevRating.toInt(),
+            rank: h['ranking'] as int? ?? 0,
+            timestamp: DateTime.fromMillisecondsSinceEpoch(
+              ((contest['startTime'] as int?) ?? 0) * 1000,
+              isUtc: true,
+            ),
+            platform: Platform.leetcode,
+          ));
         prevRating = rating;
       }
 
@@ -160,14 +176,37 @@ class LeetCodeService {
   }
 
   /// Fetch activity calendar for heatmap.
-  Future<ActivityData?> fetchActivityCalendar(String username, {int? year}) async {
+  Future<ActivityData?> fetchActivityCalendar(String username, {int? year, DateTime? now}) async {
     try {
+      // Load every calendar year touched by the displayed 180-day window.
+      if (year == null) {
+        final today = ActivityData.day(now ?? DateTime.now());
+        final firstDay = today.subtract(const Duration(days: 179));
+        final calendars = await Future.wait([
+          for (var y = firstDay.year; y <= today.year; y++)
+            fetchActivityCalendar(username, year: y),
+        ]);
+        if (calendars.any((calendar) => calendar == null)) return null;
+        final merged = <DateTime, int>{};
+        final activeYears = <int>{};
+        var longestStreak = 0;
+        for (final calendar in calendars.cast<ActivityData>()) {
+          merged.addAll(calendar.submissionCalendar);
+          activeYears.addAll(calendar.activeYears);
+          if (calendar.longestStreak > longestStreak) {
+            longestStreak = calendar.longestStreak;
+          }
+        }
+        return ActivityData(
+          submissionCalendar: merged,
+          totalActiveDays: merged.values.where((count) => count > 0).length,
+          longestStreak: longestStreak,
+          activeYears: activeYears.toList()..sort(),
+        );
+      }
       final data = await _graphql(
         LeetCodeQueries.userCalendar,
-        variables: {
-          'username': username,
-          if (year != null) 'year': year,
-        },
+        variables: {'username': username, 'year': year},
       );
       if (data == null || data['matchedUser'] == null) return null;
 
@@ -179,22 +218,27 @@ class LeetCodeService {
 
       final calendarData = <DateTime, int>{};
       for (final entry in submissionMap.entries) {
-        final timestamp = int.tryParse(entry.key) ?? 0;
+        final timestamp = int.tryParse(entry.key);
+        final count = entry.value as int? ?? 0;
+        if (timestamp == null || count <= 0) continue;
         final date = DateTime.fromMillisecondsSinceEpoch(
           timestamp * 1000,
           isUtc: true,
         );
         final normalizedDate = DateTime.utc(date.year, date.month, date.day);
-        calendarData[normalizedDate] = (entry.value as int? ?? 0);
+        calendarData.update(
+          normalizedDate,
+          (value) => value + count,
+          ifAbsent: () => count,
+        );
       }
 
       return ActivityData(
         submissionCalendar: calendarData,
         totalActiveDays: calendar['totalActiveDays'] as int? ?? 0,
-        currentStreak: calendar['streak'] as int? ?? 0,
-        activeYears: (calendar['activeYears'] as List?)
-                ?.map((e) => e as int)
-                .toList() ??
+        longestStreak: calendar['streak'] as int? ?? 0,
+        activeYears:
+            (calendar['activeYears'] as List?)?.map((e) => e as int).toList() ??
             [],
       );
     } catch (e) {
