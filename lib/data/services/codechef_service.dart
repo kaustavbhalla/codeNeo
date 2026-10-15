@@ -64,7 +64,7 @@ class CodeChefService {
         maxRating: maxRating,
         rank: stars,
         globalRank: globalRank,
-        problemsSolved: 0, // Not reliably available from profile page
+        problemsSolved: _extractProblemsSolved(html),
         contestsAttended: contestsAttended,
         avatarUrl: avatarUrl,
         lastUpdated: DateTime.now(),
@@ -199,6 +199,19 @@ class CodeChefService {
   }
 
   // ─── HTML Parsing Helpers ───
+
+  /// Extract the profile's total, rather than path or contest counts.
+  int _extractProblemsSolved(String html) {
+    final text = html
+        .replaceAll(RegExp(r'<[^>]*>'), ' ')
+        .replaceAll(RegExp(r'&(?:nbsp|#160|#xA0);', caseSensitive: false), ' ');
+    final match = RegExp(
+      r'Total\s+Problems\s+Solved\s*:\s*([0-9][0-9,]*)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (match == null) return 0;
+    return int.tryParse(match.group(1)!.replaceAll(',', '')) ?? 0;
+  }
 
   /// Extract the `all_rating` JSON array from the embedded script.
   List<Map<String, dynamic>> _extractAllRating(String html) {
